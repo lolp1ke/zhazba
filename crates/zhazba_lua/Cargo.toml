@@ -1,0 +1,11 @@
+[package]
+name = "zhazba_lua"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Internal crate
+zhazba_lua_derive = { workspace = true }
+
+# External packages
+mlua = { workspace = true }

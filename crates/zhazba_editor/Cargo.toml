@@ -1,0 +1,18 @@
+[package]
+name = "zhazba_editor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Internal crates
+zhazba_action = { workspace = true }
+zhazba_buffer = { workspace = true }
+zhazba_config = { workspace = true }
+zhazba_render = { workspace = true }
+
+# External packages
+anyhow = { workspace = true }
+crossterm = { workspace = true }
+futures = { workspace = true }
+futures-timer = { workspace = true }
+tracing = { workspace = true }

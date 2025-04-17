@@ -1,0 +1,9 @@
+[package]
+name = "zhazba_buffer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# External packages
+ropey = { workspace = true }
+tracing = { workspace = true }
