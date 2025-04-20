@@ -1,22 +1,36 @@
 use std::collections::HashMap;
 
-use mlua::FromLua;
+use zhazba_lua::lua_userdata_enum;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[lua_userdata_enum]
 pub enum Action {
   Quit(bool),
-  ChangeMode(char),
+  Save,
+  ChangeMode(String),
 }
+// impl zhazba_lua::IntoLua for Action {
+//   fn into_lua(
+//     self,
+//     lua: &zhazba_lua::Lua,
+//   ) -> zhazba_lua::Result<zhazba_lua::Value> {
+//     todo!()
+//   }
+// }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[lua_userdata_enum]
 pub enum KeyAction {
   Single(Action),
   Multiple(Vec<Action>),
   Nested(HashMap<String, KeyAction>),
 }
-impl FromLua for KeyAction {
-  fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-    todo!()
-  }
-}
+// impl zhazba_lua::IntoLua for KeyAction {
+//   fn into_lua(
+//     self,
+//     lua: &zhazba_lua::Lua,
+//   ) -> zhazba_lua::Result<zhazba_lua::Value> {
+//     todo!()
+//   }
+// }

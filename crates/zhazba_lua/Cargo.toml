@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Internal crate
-zhazba_lua_derive = { workspace = true }
+zhazba_lua_derive = { path = "../zhazba_lua_derive" }
 
 # External packages
 mlua = { workspace = true }

@@ -1,10 +1,10 @@
+mod element;
+mod render;
 mod term;
+mod ui_register;
 
+
+pub use element::*;
+pub use render::*;
 pub use term::*;
-
-use std::fmt::Debug;
-
-
-pub trait Render: Debug + Drop {
-  fn draw_frame(&mut self, contnet: String);
-}
+pub use ui_register::*;

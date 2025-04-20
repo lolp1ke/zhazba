@@ -6,14 +6,17 @@ authors = ["Alibek Bekzhanov"]
 
 [dependencies]
 # Internal crates
+zhazba_action = { workspace = true }
 zhazba_args = { workspace = true }
 zhazba_editor = { workspace = true }
 zhazba_logger = { workspace = true }
+zhazba_lua = { workspace = true }
 zhazba_render = { workspace = true }
 
 # External packages
 anyhow = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 
 [[bin]]
@@ -31,7 +34,7 @@ members = [
   "crates/zhazba_editor",
   "crates/zhazba_logger",
   "crates/zhazba_lua",
-  "crates/zhazba_lua_derive",
+  # "crates/zhazba_lua_derive",
   "crates/zhazba_render",
 ]
 resolver = "2"
@@ -45,7 +48,6 @@ zhazba_config = { path = "crates/zhazba_config" }
 zhazba_editor = { path = "crates/zhazba_editor" }
 zhazba_logger = { path = "crates/zhazba_logger" }
 zhazba_lua = { path = "crates/zhazba_lua" }
-zhazba_lua_derive = { path = "crates/zhazba_lua_derive" }
 zhazba_render = { path = "crates/zhazba_render" }
 
 # External packages

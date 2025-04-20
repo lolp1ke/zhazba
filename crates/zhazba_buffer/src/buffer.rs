@@ -1,11 +1,26 @@
-use std::{io, path::PathBuf};
+use std::{cell::RefCell, io, ops::Deref, path::PathBuf, rc::Rc};
 
 use ropey::Rope;
 use tracing::error;
 
 
-#[derive(Debug)]
-pub struct Buffer {
+#[derive(Debug, Clone)]
+pub struct Buffer(Rc<RefCell<BufferInner>>);
+impl Buffer {
+  pub fn new(buffer: BufferInner) -> Self {
+    return Self(Rc::new(RefCell::new(buffer)));
+  }
+}
+impl Deref for Buffer {
+  type Target = Rc<RefCell<BufferInner>>;
+
+  fn deref(&self) -> &Self::Target {
+    return &self.0;
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct BufferInner {
   file: PathBuf,
   changed: bool,
 
@@ -14,7 +29,7 @@ pub struct Buffer {
   pos: (usize, usize),
   v_pos: (usize, usize),
 }
-impl Buffer {
+impl BufferInner {
   pub fn load_from_file(file: PathBuf) -> Self {
     let content = match std::fs::read_to_string(&file) {
       Ok(string) => string,

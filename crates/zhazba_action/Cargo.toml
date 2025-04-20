@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mlua = { workspace = true }
+zhazba_lua = { workspace = true }
