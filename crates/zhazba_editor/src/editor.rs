@@ -17,7 +17,7 @@ use zhazba_action::{Action, KeyAction};
 use zhazba_buffer::{Buffer, BufferInner, BufferManager};
 use zhazba_config::Config;
 use zhazba_lua::{lua_method, lua_userdata};
-use zhazba_render::Render;
+use zhazba_render::TermRender;
 
 
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ pub struct Editor(Rc<RefCell<EditorInner>>);
 impl Editor {
   pub fn new(
     workspace: Option<PathBuf>,
-    render: impl Render + 'static,
+    render: TermRender,
     size: (u16, u16),
   ) -> Self {
     return Self(Rc::new(RefCell::new(EditorInner::new(
@@ -47,7 +47,6 @@ impl Deref for Editor {
   }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct EditorInner {
   pub config: Config,
@@ -57,7 +56,8 @@ pub struct EditorInner {
   // buffer_idx: usize,
   mode: char,
 
-  render: Rc<RefCell<Box<dyn Render>>>,
+  render: TermRender,
+  // render: Rc<RefCell<Box<dyn Render>>>,
   size: (u16, u16),
   pos: (usize, usize),
   v_pos: (usize, usize),
@@ -67,7 +67,7 @@ pub struct EditorInner {
 impl EditorInner {
   pub fn new(
     workspace: Option<PathBuf>,
-    render: impl Render + 'static,
+    render: TermRender,
     size: (u16, u16),
   ) -> Self {
     return Self {
@@ -79,7 +79,8 @@ impl EditorInner {
       // buffer_idx: usize::MAX,
       mode: 'n',
 
-      render: Rc::new(RefCell::new(Box::new(render))),
+      render,
+      // render: Rc::new(RefCell::new(Box::new(render))),
       size,
       pos: (0, 0),
       v_pos: (0, 0),
@@ -122,9 +123,9 @@ impl EditorInner {
   }
 
 
-  fn render(&self) -> RefMut<'_, Box<dyn Render>> {
-    return self.render.borrow_mut();
-  }
+  // fn render(&self) -> RefMut<'_, Box<dyn Render>> {
+  // return self.render.borrow_mut();
+  // }
 
   fn handle_event(&self, event: event::Event) -> Option<KeyAction> {
     match event {
@@ -198,6 +199,7 @@ impl EditorInner {
 
   pub async fn run(&mut self) -> Result<()> {
     let mut event_stream = event::EventStream::new();
+
     loop {
       let mut delay =
         futures_timer::Delay::new(time::Duration::from_millis(100)).fuse();
@@ -221,7 +223,7 @@ impl EditorInner {
             None => {}
           };
 
-          // self.render().draw_frame();
+          // self.render().draw_frame()?;
           if self.execute_actions()? {
             break;
           };

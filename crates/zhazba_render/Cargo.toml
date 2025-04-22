@@ -7,4 +7,5 @@ edition = "2024"
 # External packages
 anyhow = { workspace = true }
 crossterm = { workspace = true }
+ratatui = { workspace = true }
 ropey = { workspace = true }
