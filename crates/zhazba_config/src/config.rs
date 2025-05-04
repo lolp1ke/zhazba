@@ -1,9 +1,4 @@
-use std::{
-  cell::{RefCell, RefMut},
-  collections::HashMap,
-  ops::Deref,
-  rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use zhazba_action::KeyAction;
 use zhazba_lua::{lua_method, lua_userdata};
@@ -52,6 +47,7 @@ impl Config {
 pub struct ConfigInner {
   theme: String,
 
+  // TODO: Replace String with Rc<str>
   pub keymaps: HashMap<(String, char), KeyAction>,
 
   tab_width: u16,

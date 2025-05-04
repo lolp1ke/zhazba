@@ -127,6 +127,7 @@ pub fn lua_userdata_enum(_args: TokenStream, item: TokenStream) -> TokenStream {
   return TokenStream::from(quote! {
     #item_enum
 
+    #[derive(Clone)]
     pub struct #factory;
     impl zhazba_lua::UserData for #factory {
       fn add_methods<M: zhazba_lua::UserDataMethods<Self>>(methods: &mut M) {

@@ -1,5 +1,7 @@
 use std::{
   cell::RefCell,
+  collections::HashMap,
+  fmt::Debug,
   io::{Stdout, stdout},
   ops::Deref,
   rc::Rc,
@@ -7,22 +9,104 @@ use std::{
 
 use anyhow::Result;
 use crossterm::{ExecutableCommand, QueueableCommand, cursor, terminal};
-use ratatui::{Terminal, prelude::CrosstermBackend};
+use ratatui::{
+  Frame, Terminal,
+  layout::{Constraint, Direction, Layout, Rect},
+  prelude::CrosstermBackend,
+  widgets::{Block, Paragraph},
+};
+
+use zhazba_lua::{lua_method, lua_userdata};
 
 
 pub fn terminal_size() -> Result<(u16, u16)> {
   return Ok(terminal::size()?);
 }
+pub fn disable_raw_mode() -> Result<()> {
+  terminal::disable_raw_mode()?;
+  return Ok(());
+}
 
-pub trait Render {}
-pub struct Renderer<T>(T)
-where
-  T: Render;
 
-#[derive(Debug, Clone)]
-pub struct TermRender(Rc<RefCell<RenderInner>>);
+// // #[ui_nodes]
+// #[derive(Clone, Debug)]
+// pub enum UiNode {
+//   Block(Block<'static>, HashMap<String, Self>),
+//   Tabs(Tabs<'static>, Vec<Self>),
+//   Paragraph(Paragraph<'static>),
+// }
+// impl UiNode {
+//   fn render(&self, frame: &mut Frame, area: Rect) {
+//     match self.clone() {
+//       Self::Block(block, children) => {
+//         let inner = block.inner(area);
+//         frame.render_widget(block, area);
+//         let chunks = Layout::default()
+//           .direction(Direction::Vertical)
+//           .constraints(
+//             children
+//               .iter()
+//               .map(|_| Constraint::Fill(1))
+//               .collect::<Vec<_>>(),
+//           )
+//           .split(inner);
+
+//         for ((_, child), &area) in children.iter().zip(chunks.iter()) {
+//           child.render(frame, area);
+//         }
+//       }
+//       Self::Paragraph(paragraph) => {
+//         frame.render_widget(paragraph, area);
+//       }
+//       Self::Tabs(tabs, children) => {
+//         frame.render_widget(tabs, area);
+
+//         for child in children.iter() {
+//           child.render(frame, area);
+//         }
+//       }
+
+//       _ => todo!(),
+//     };
+//   }
+
+
+//   pub(crate) fn make_block() -> Self {
+//     return Self::Block(Block::default(), HashMap::default());
+//   }
+// }
+
+#[derive(Clone, Debug)]
+pub enum UiNode {
+  Block {
+    widget: Block<'static>,
+    direction: Direction,
+    children: Vec<UiNode>,
+  },
+
+  Paragraph {
+    widget: Paragraph<'static>,
+  },
+}
+impl UiNode {
+  fn render(&self, frame: &mut Frame, area: Rect) {}
+
+  fn load_buffer(&mut self, content: String) {
+    match self {
+      Self::Paragraph { widget } => {
+        *widget = Paragraph::new(content);
+      }
+      _ => {}
+    };
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct TermRender(Rc<RefCell<TermRenderInner>>);
+#[lua_userdata]
 impl TermRender {
   pub fn new() -> Result<Self> {
+    terminal::enable_raw_mode()?;
     let mut stdout = stdout();
     stdout
       .execute(terminal::EnterAlternateScreen)?
@@ -30,28 +114,62 @@ impl TermRender {
     let stdout = Terminal::new(CrosstermBackend::new(stdout))?;
     let stdout = Rc::new(RefCell::new(stdout));
 
-    return Ok(Self(Rc::new(RefCell::new(RenderInner { stdout }))));
+
+    let mut ui_nodes = HashMap::new();
+    // ui_nodes.insert(
+    //   "window".to_string(),
+    //   UiNode::Tabs(
+    //     Tabs::default(),
+    //     Vec::from([UiNode::Paragraph(Paragraph::new("123"))]),
+    //   ),
+    // );
+
+    let layout =
+      Layout::new(Direction::Horizontal, [Constraint::Percentage(100)]);
+
+    return Ok(Self(Rc::new(RefCell::new(TermRenderInner {
+      stdout,
+
+      ui_nodes,
+      layout,
+    }))));
+  }
+
+  #[lua_method]
+  fn window(&self) -> UiNode {
+    return self.borrow().ui_nodes.get("window").cloned().unwrap();
   }
 }
 impl Deref for TermRender {
-  type Target = Rc<RefCell<RenderInner>>;
+  type Target = Rc<RefCell<TermRenderInner>>;
 
   fn deref(&self) -> &Self::Target {
     return &self.0;
   }
 }
 
-#[derive(Debug, Clone)]
-pub struct RenderInner {
-  stdout: Rc<RefCell<Terminal<CrosstermBackend<Stdout>>>>,
+
+#[derive(Debug)]
+pub struct TermRenderInner {
+  pub stdout: Rc<RefCell<Terminal<CrosstermBackend<Stdout>>>>,
+
+  ui_nodes: HashMap<String, UiNode>,
+  layout: Layout,
 }
-impl RenderInner {
+impl TermRenderInner {
   pub fn draw_frame(&self) -> Result<()> {
-    self.stdout.borrow_mut().flush()?;
+    self.stdout.borrow_mut().draw(|frame| {
+      let chunks = self.layout.split(frame.area());
+
+      for ((_, node), &area) in self.ui_nodes.iter().zip(chunks.iter()) {
+        node.render(frame, area);
+      }
+    })?;
+
     return Ok(());
   }
 
-  pub fn draw_cursor(&self, x: u16, y: u16) -> Result<()> {
+  fn draw_cursor(&self, x: u16, y: u16) -> Result<()> {
     self
       .stdout
       .borrow_mut()

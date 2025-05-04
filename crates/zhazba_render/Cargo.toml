@@ -4,8 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Internal crates
+zhazba_buffer = { workspace = true }
+zhazba_lua = { workspace = true }
+zhazba_render_derive = { path = "../zhazba_render_derive" }
+
 # External packages
 anyhow = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
 ropey = { workspace = true }
+tracing = { workspace = true }

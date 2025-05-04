@@ -1,4 +1,6 @@
-use std::{cell::RefCell, io, ops::Deref, path::PathBuf, rc::Rc};
+use std::{
+  borrow::Cow, cell::RefCell, ffi::OsStr, io, ops::Deref, path::PathBuf, rc::Rc,
+};
 
 use ropey::Rope;
 use tracing::error;
@@ -21,10 +23,10 @@ impl Deref for Buffer {
 
 #[derive(Debug, Clone)]
 pub struct BufferInner {
-  file: PathBuf,
+  pub file: PathBuf,
   changed: bool,
 
-  content: Rope,
+  pub(crate) content: Rope,
 
   pos: (usize, usize),
   v_pos: (usize, usize),
@@ -61,5 +63,12 @@ impl BufferInner {
     std::fs::write(&self.file, content)?;
 
     return Ok(());
+  }
+
+
+  pub fn insert(&mut self, (cx, cy): (usize, usize), content: &str) {
+    let insert_idx: usize = self.pos_to_idx((cx, cy));
+    self.content.insert(insert_idx, content);
+    self.changed = true;
   }
 }

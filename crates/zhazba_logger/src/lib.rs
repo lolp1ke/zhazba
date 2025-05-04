@@ -1,4 +1,4 @@
-use tracing::{dispatcher::set_global_default, info};
+use tracing::dispatcher::set_global_default;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 

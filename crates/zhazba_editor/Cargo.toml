@@ -9,6 +9,7 @@ zhazba_action = { workspace = true }
 zhazba_buffer = { workspace = true }
 zhazba_config = { workspace = true }
 zhazba_lua = { workspace = true }
+zhazba_plugin = { workspace = true }
 zhazba_render = { workspace = true }
 
 # External packages

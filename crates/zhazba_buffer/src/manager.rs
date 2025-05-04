@@ -15,7 +15,7 @@ impl BufferManager {
   pub fn new() -> Self {
     return Self {
       buffers: VecDeque::new(),
-      current_idx: usize::MAX,
+      current_idx: 0,
     };
   }
   pub fn set_buffer_idx(&mut self, idx: usize) {
@@ -23,6 +23,16 @@ impl BufferManager {
       return;
     };
     self.current_idx = idx;
+  }
+  pub fn get_buffer(&self) -> &Buffer {
+    return &self[self.current_idx];
+  }
+  pub fn get_buffer_mut(&mut self) -> &mut Buffer {
+    return if let Some(buffer) = self.buffers.get_mut(self.current_idx) {
+      buffer
+    } else {
+      todo!()
+    };
   }
 }
 impl Deref for BufferManager {

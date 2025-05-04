@@ -8,4 +8,6 @@ edition = "2024"
 zhazba_lua_derive = { path = "../zhazba_lua_derive" }
 
 # External packages
+anyhow = { workspace = true }
 mlua = { workspace = true }
+tracing = { workspace = true }
