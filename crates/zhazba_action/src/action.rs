@@ -3,12 +3,17 @@ use std::collections::HashMap;
 use zhazba_lua::lua_userdata_enum;
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[lua_userdata_enum]
 pub enum Action {
   Quit(bool),
   Save,
   ChangeMode(String),
+
+  EnterRegister(String),
+  LeaveRegister,
+
+  ExecuteCommand,
 
   MoveTo(usize, usize),
   MoveLeft,
@@ -17,11 +22,14 @@ pub enum Action {
   MoveDown,
 
   InsertIntoRegister(String, String),
+  DeletePrevFromRegister(String),
+  ClearRegister(String),
   InsertIntoBufferAt(usize, usize, String),
   // Callback(Function),
+  Dummy,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 #[lua_userdata_enum]
 pub enum KeyAction {
   Single(Action),

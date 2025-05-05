@@ -6,7 +6,7 @@ use std::{
 use crate::Buffer;
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct BufferManager {
   buffers: VecDeque<Buffer>,
   current_idx: usize,

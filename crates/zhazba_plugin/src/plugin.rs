@@ -5,7 +5,7 @@ use anyhow::Result;
 use crate::{Registry, Runtime};
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Plugin(Rc<RefCell<PluginInner>>);
 impl Plugin {
   pub fn new() -> Self {

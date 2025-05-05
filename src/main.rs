@@ -21,7 +21,6 @@ async fn main() -> Result<()> {
 
   let render = TermRender::new()?;
   let editor = Editor::new(args.workspace, render, terminal_size()?);
-  editor.borrow_mut().load_dir()?;
 
 
   let config_source = match std::fs::read_to_string(".config/zhazba.lua") {
@@ -34,6 +33,13 @@ async fn main() -> Result<()> {
   LUA
     .with(|lua| {
       use zhazba_action::{ActionUserDataFactory, KeyActionUserDataFactory};
+      lua
+        .load(format!(
+          "package.path = package.path .. \";{}.config/?.lua\"",
+          if env!("ENV") == "DEBUG" { "" } else { "~/" }
+        ))
+        .exec()?;
+
 
       let editor = lua.create_userdata(editor.clone())?;
       lua.globals().set("Editor", editor)?;

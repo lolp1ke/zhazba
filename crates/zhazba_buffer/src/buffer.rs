@@ -6,7 +6,7 @@ use ropey::Rope;
 use tracing::error;
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Buffer(Rc<RefCell<BufferInner>>);
 impl Buffer {
   pub fn new(buffer: BufferInner) -> Self {
@@ -21,7 +21,7 @@ impl Deref for Buffer {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct BufferInner {
   pub file: PathBuf,
   changed: bool,

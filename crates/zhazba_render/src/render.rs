@@ -1,6 +1,5 @@
 use std::{
   cell::RefCell,
-  collections::HashMap,
   fmt::Debug,
   io::{Stdout, stdout},
   ops::Deref,
@@ -13,9 +12,10 @@ use ratatui::{
   Frame, Terminal,
   layout::{Constraint, Direction, Layout, Rect},
   prelude::CrosstermBackend,
-  widgets::{Block, Paragraph},
+  widgets::{Block, Paragraph, Tabs},
 };
 
+use zhazba_buffer::Buffer;
 use zhazba_lua::{lua_method, lua_userdata};
 
 
@@ -81,12 +81,19 @@ pub enum UiNode {
   Block {
     widget: Block<'static>,
     direction: Direction,
-    children: Vec<UiNode>,
+    children: Vec<Self>,
+  },
+  Tabs {
+    widget: Tabs<'static>,
+    children: Vec<Self>,
   },
 
   Paragraph {
     widget: Paragraph<'static>,
   },
+
+  // maybe add rect for positioning
+  Buffer(Rc<Buffer>),
 }
 impl UiNode {
   fn render(&self, frame: &mut Frame, area: Rect) {}
@@ -96,6 +103,15 @@ impl UiNode {
       Self::Paragraph { widget } => {
         *widget = Paragraph::new(content);
       }
+      _ => {}
+    };
+  }
+  fn append_child(&mut self, node: Self) {
+    match self {
+      Self::Block { children, .. } | Self::Tabs { children, .. } => {
+        children.push(node)
+      }
+
       _ => {}
     };
   }
@@ -115,14 +131,14 @@ impl TermRender {
     let stdout = Rc::new(RefCell::new(stdout));
 
 
-    let mut ui_nodes = HashMap::new();
-    // ui_nodes.insert(
-    //   "window".to_string(),
-    //   UiNode::Tabs(
-    //     Tabs::default(),
-    //     Vec::from([UiNode::Paragraph(Paragraph::new("123"))]),
-    //   ),
-    // );
+    let mut node = UiNode::Block {
+      widget: Block::new(),
+      direction: Direction::Vertical,
+      children: Vec::new(),
+    };
+    node.append_child(UiNode::Paragraph {
+      widget: Paragraph::default(),
+    });
 
     let layout =
       Layout::new(Direction::Horizontal, [Constraint::Percentage(100)]);
@@ -130,14 +146,14 @@ impl TermRender {
     return Ok(Self(Rc::new(RefCell::new(TermRenderInner {
       stdout,
 
-      ui_nodes,
+      node,
       layout,
     }))));
   }
 
   #[lua_method]
   fn window(&self) -> UiNode {
-    return self.borrow().ui_nodes.get("window").cloned().unwrap();
+    return self.borrow().node.clone();
   }
 }
 impl Deref for TermRender {
@@ -153,18 +169,18 @@ impl Deref for TermRender {
 pub struct TermRenderInner {
   pub stdout: Rc<RefCell<Terminal<CrosstermBackend<Stdout>>>>,
 
-  ui_nodes: HashMap<String, UiNode>,
+  node: UiNode,
   layout: Layout,
 }
 impl TermRenderInner {
   pub fn draw_frame(&self) -> Result<()> {
-    self.stdout.borrow_mut().draw(|frame| {
-      let chunks = self.layout.split(frame.area());
+    // self.stdout.borrow_mut().draw(|frame| {
+    //   let chunks = self.layout.split(frame.area());
 
-      for ((_, node), &area) in self.ui_nodes.iter().zip(chunks.iter()) {
-        node.render(frame, area);
-      }
-    })?;
+    //   for ((_, node), &area) in self.node.iter().zip(chunks.iter()) {
+    //     node.render(frame, area);
+    //   }
+    // })?;
 
     return Ok(());
   }

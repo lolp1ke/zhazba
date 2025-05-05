@@ -4,7 +4,7 @@ use zhazba_action::KeyAction;
 use zhazba_lua::{lua_method, lua_userdata};
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Config(Rc<RefCell<ConfigInner>>);
 impl Deref for Config {
   type Target = Rc<RefCell<ConfigInner>>;

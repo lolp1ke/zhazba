@@ -13,7 +13,7 @@ use crossterm::{ExecutableCommand, event, terminal};
 use futures::{FutureExt, StreamExt, select};
 use tracing::{error, info};
 
-use zhazba_action::{Action, KeyAction};
+use zhazba_action::Action;
 use zhazba_buffer::{Buffer, BufferInner, BufferManager};
 use zhazba_config::Config;
 use zhazba_lua::{lua_method, lua_userdata};
@@ -21,12 +21,13 @@ use zhazba_plugin::Plugin;
 use zhazba_render::TermRender;
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Editor(Rc<RefCell<EditorInner>>);
 #[lua_userdata]
 impl Editor {
-  const DEFAULT_MODE: char = 'n';
-  const BUFFER_MODE: char = 'i';
+  pub(crate) const DEFAULT_MODE: char = 'n';
+  pub(crate) const BUFFER_MODE: char = 'i';
+  pub(crate) const COMMAND_REGISTER: &str = "cmd";
 
 
   pub fn new(
@@ -51,8 +52,9 @@ impl Editor {
   fn create_register(&self, mode: String) {
     self
       .borrow_mut()
-      .registers
-      .insert(mode.chars().next().unwrap(), String::new());
+      .register_map
+      // NOTE: Maybe use String::with_capacity(...);
+      .insert(Rc::from(mode), String::new());
   }
 }
 impl Deref for Editor {
@@ -63,24 +65,25 @@ impl Deref for Editor {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct EditorInner {
-  config: Config,
+  pub(crate) config: Config,
   pub(crate) buffer_manager: BufferManager,
   workspace: Option<PathBuf>,
 
-  mode: char,
+  pub(crate) mode: char,
   render: TermRender,
 
   plugin: Plugin,
 
   size: (u16, u16),
-  pos: (usize, usize),
+  pub(crate) pos: (usize, usize),
   v_pos: (usize, usize),
 
-  registers: HashMap<char, String>,
+  pub(crate) register_map: HashMap<Rc<str>, String>,
+  pub(crate) current_register: Option<Rc<str>>,
 
-  actions_queqe: VecDeque<Action>,
+  pub(crate) actions_queqe: VecDeque<Action>,
 }
 impl EditorInner {
   pub fn new(
@@ -88,7 +91,10 @@ impl EditorInner {
     render: TermRender,
     size: (u16, u16),
   ) -> Self {
-    return Self {
+    let register_map =
+      HashMap::from_iter([(Rc::from(Editor::COMMAND_REGISTER), String::new())]);
+
+    let mut editor = Self {
       config: Config::default(),
 
       workspace,
@@ -102,12 +108,17 @@ impl EditorInner {
       pos: (0, 0),
       v_pos: (0, 0),
 
-      registers: HashMap::new(),
+      register_map,
+      current_register: None,
 
       actions_queqe: VecDeque::new(),
     };
+    let _ = editor.load_dir();
+
+
+    return editor;
   }
-  pub fn load_dir(&mut self) -> anyhow::Result<()> {
+  fn load_dir(&mut self) -> Result<()> {
     if let Some(workspace) = self.workspace.as_ref() {
       if workspace.is_file() {
         self.buffer_manager.push_front(Buffer::new(
@@ -124,14 +135,10 @@ impl EditorInner {
       })?;
     };
 
-    // info!("Buffers: {:#?}", *self.buffer_manager);
     return Ok(());
 
 
-    fn visit_dirs(
-      dir: &PathBuf,
-      cb: &mut dyn FnMut(&DirEntry),
-    ) -> anyhow::Result<()> {
+    fn visit_dirs(dir: &PathBuf, cb: &mut dyn FnMut(&DirEntry)) -> Result<()> {
       if !dir.is_dir() {
         return Ok(());
       };
@@ -149,124 +156,6 @@ impl EditorInner {
     }
   }
 
-
-  fn handle_event(&self, event: event::Event) -> Option<KeyAction> {
-    match event {
-      event::Event::Key(event::KeyEvent {
-        code,
-        modifiers,
-        kind: event::KeyEventKind::Press,
-        ..
-      }) => {
-        let key_code = format!(
-          "{}{}{}",
-          modifiers,
-          if modifiers.is_empty() { "" } else { "-" },
-          code
-        )
-        .to_lowercase();
-
-        let ka = self
-          .config
-          .borrow()
-          .keymaps
-          .get(&(key_code, self.mode))
-          .cloned();
-
-        if let None = ka {
-          if self.mode == Editor::BUFFER_MODE {
-            return Some(KeyAction::Multiple(vec![
-              Action::InsertIntoBufferAt(
-                self.pos.0,
-                self.pos.1,
-                code.to_string(),
-              ),
-              Action::MoveRight,
-            ]));
-          };
-
-          for (&register_mode, _) in self.registers.iter() {
-            if register_mode == self.mode {
-              return Some(KeyAction::Single(Action::InsertIntoRegister(
-                format!("{}", register_mode),
-                format!("{}", code),
-              )));
-            };
-          }
-        };
-
-        return ka;
-      }
-
-      _ => return None,
-    };
-  }
-  fn handle_key_action(&mut self, key_action: KeyAction) {
-    use KeyAction::*;
-
-    match key_action {
-      Single(action) => {
-        self.actions_queqe.push_back(action);
-      }
-      Multiple(actions) => {
-        for action in actions {
-          self.actions_queqe.push_back(action);
-        }
-      }
-      Nested(keymap) => {
-        todo!("{:?}", keymap);
-      }
-    };
-  }
-  fn execute_actions(&mut self) -> Result<bool> {
-    let mut quit = false;
-    while let Some(action) = self.actions_queqe.pop_front() {
-      quit = self.execute_action(action)?;
-    }
-
-    return Ok(quit);
-  }
-  fn execute_action(&mut self, action: Action) -> Result<bool> {
-    use Action::*;
-
-    match action {
-      Quit(force) => {
-        if force {
-          return Ok(true);
-        };
-
-        return Ok(true);
-      }
-      // Save => {}
-      ChangeMode(mode) => {
-        self.mode = mode.chars().next().unwrap_or_else(|| Editor::DEFAULT_MODE);
-      }
-
-      MoveLeft => todo!(),
-      MoveRight => self.pos.0 += 1,
-      MoveUp => todo!(),
-      MoveDown => todo!(),
-
-      InsertIntoRegister(mode, append_char) => {
-        if let Some(content) = self
-          .registers
-          .get_mut(&mode.chars().next().unwrap_or_else(|| '\0'))
-        {
-          content.push_str(&append_char);
-        };
-      }
-      InsertIntoBufferAt(cx, cy, append_char) => {
-        self.insert_into_buffer((cx, cy), &append_char);
-      }
-
-      _ => error!("Action: {:?} is not implemented yet", action),
-    };
-
-    return Ok(false);
-  }
-  fn cursor_pos(&self) -> (u16, u16) {
-    return (self.pos.0 as u16, self.pos.1 as u16);
-  }
 
   pub async fn run(&mut self) -> Result<()> {
     self.plugin.borrow_mut().init()?;
@@ -287,7 +176,6 @@ impl EditorInner {
           match event {
             Some(Ok(event)) => {
               if let Some(key_action) = self.handle_event(event) {
-                info!("Key action: {:?}", key_action);
                 self.handle_key_action(key_action);
               };
             }
@@ -316,7 +204,6 @@ impl EditorInner {
       .backend_mut()
       .execute(terminal::LeaveAlternateScreen)?;
 
-    info!("{:?}", self.buffer_manager.deref()[0]);
     return Ok(());
   }
 }
