@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use tracing::error;
+use tracing::{error, info};
 
 use zhazba_action::Action;
 
@@ -20,6 +20,7 @@ impl EditorInner {
   fn execute_action(&mut self, action: Action) -> Result<bool> {
     use Action::*;
 
+    info!("Action to be executed: {:?}", action);
     match action {
       Quit(force) => {
         if force {
@@ -30,7 +31,13 @@ impl EditorInner {
       }
       Save => todo!(),
       ChangeMode(mode) => {
-        self.mode = mode.chars().next().unwrap_or_else(|| Editor::DEFAULT_MODE);
+        self.mode = mode.chars().next().unwrap_or_else(|| {
+          if env!("ENV") == "DEBUG" {
+            unreachable!()
+          } else {
+            return Editor::DEFAULT_MODE;
+          };
+        });
       }
 
       EnterRegister(register) => {
@@ -38,7 +45,7 @@ impl EditorInner {
       }
       LeaveRegister => self.current_register = None,
 
-      ExecuteCommand => self.execute_command(),
+      ExecuteCommand => return self.execute_command(),
 
       MoveTo(cx, cy) => self.pos = (cx, cy),
       MoveLeft => todo!(),
@@ -51,9 +58,23 @@ impl EditorInner {
           content.push_str(&append_char);
         };
       }
+      InsertIntoCurrentRegister(append_char) => {
+        if let Some(register) = &self.current_register {
+          if let Some(content) = self.register_map.get_mut(register) {
+            content.push_str(&append_char);
+          };
+        };
+      }
       DeletePrevFromRegister(register) => {
         if let Some(content) = self.register_map.get_mut(&Rc::from(register)) {
           content.pop();
+        };
+      }
+      DeletePrevFromCurrentRegister => {
+        if let Some(register) = &self.current_register {
+          if let Some(content) = self.register_map.get_mut(register) {
+            content.pop();
+          };
         };
       }
       ClearRegister(register) => {

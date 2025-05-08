@@ -1,6 +1,4 @@
-use std::{
-  borrow::Cow, cell::RefCell, ffi::OsStr, io, ops::Deref, path::PathBuf, rc::Rc,
-};
+use std::{cell::RefCell, io, ops::Deref, path::PathBuf, rc::Rc};
 
 use ropey::Rope;
 use tracing::error;

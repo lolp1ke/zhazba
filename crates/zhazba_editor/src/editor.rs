@@ -1,29 +1,27 @@
 use std::{
-  cell::RefCell,
+  cell::{Ref, RefCell},
   collections::{HashMap, VecDeque},
   fs::DirEntry,
   ops::Deref,
   path::PathBuf,
   rc::Rc,
-  time,
+  time::Duration,
 };
 
 use anyhow::Result;
 use crossterm::{ExecutableCommand, event, terminal};
 use futures::{FutureExt, StreamExt, select};
-use tracing::{error, info};
+use tracing::error;
 
-use zhazba_action::Action;
+use zhazba_action::{Action, KeyAction};
 use zhazba_buffer::{Buffer, BufferInner, BufferManager};
 use zhazba_config::Config;
-use zhazba_lua::{lua_method, lua_userdata};
 use zhazba_plugin::Plugin;
 use zhazba_render::TermRender;
 
 
 #[derive(Clone, Debug)]
 pub struct Editor(Rc<RefCell<EditorInner>>);
-#[lua_userdata]
 impl Editor {
   pub(crate) const DEFAULT_MODE: char = 'n';
   pub(crate) const BUFFER_MODE: char = 'i';
@@ -38,23 +36,6 @@ impl Editor {
     return Self(Rc::new(RefCell::new(EditorInner::new(
       workspace, render, size,
     ))));
-  }
-
-  #[lua_method]
-  fn config(&self) -> Config {
-    return self.borrow().config.clone();
-  }
-  #[lua_method]
-  fn render(&self) -> TermRender {
-    return self.borrow().render.clone();
-  }
-  #[lua_method]
-  fn create_register(&self, mode: String) {
-    self
-      .borrow_mut()
-      .register_map
-      // NOTE: Maybe use String::with_capacity(...);
-      .insert(Rc::from(mode), String::new());
   }
 }
 impl Deref for Editor {
@@ -72,7 +53,7 @@ pub struct EditorInner {
   workspace: Option<PathBuf>,
 
   pub(crate) mode: char,
-  render: TermRender,
+  pub(crate) render: TermRender,
 
   plugin: Plugin,
 
@@ -127,7 +108,6 @@ impl EditorInner {
 
         return Ok(());
       };
-
       visit_dirs(workspace, &mut |dir_entry: &DirEntry| {
         let buffer: BufferInner = BufferInner::load_from_file(dir_entry.path());
         let buffer: Buffer = Buffer::new(buffer);
@@ -135,9 +115,8 @@ impl EditorInner {
       })?;
     };
 
+
     return Ok(());
-
-
     fn visit_dirs(dir: &PathBuf, cb: &mut dyn FnMut(&DirEntry)) -> Result<()> {
       if !dir.is_dir() {
         return Ok(());
@@ -152,8 +131,15 @@ impl EditorInner {
         };
       }
 
+
       return Ok(());
     }
+  }
+  pub(crate) fn keymaps(&self) -> Ref<'_, HashMap<(String, char), KeyAction>> {
+    return Ref::map(self.config.borrow(), |config| return &config.keymaps);
+  }
+  pub(crate) fn commands(&self) -> Ref<'_, HashMap<String, KeyAction>> {
+    return Ref::map(self.config.borrow(), |config| return &config.commands);
   }
 
 
@@ -165,7 +151,7 @@ impl EditorInner {
     self.render.borrow().draw_frame()?;
     loop {
       let mut delay =
-        futures_timer::Delay::new(time::Duration::from_millis(100)).fuse();
+        futures_timer::Delay::new(Duration::from_millis(100)).fuse();
       let mut event = event_stream.next().fuse();
 
       select! {
@@ -175,8 +161,19 @@ impl EditorInner {
         event = event => {
           match event {
             Some(Ok(event)) => {
-              if let Some(key_action) = self.handle_event(event) {
-                self.handle_key_action(key_action);
+              if self.is_cmd_register() {
+                if let Some(ka) = self.handle_command_event(&event) {
+                  self.handle_key_action(ka);
+                  if self.execute_actions()? {
+                    break;
+                  };
+                };
+
+                continue;
+              };
+
+              if let Some(ka) = self.handle_event(&event) {
+                self.handle_key_action(ka);
               };
             }
 
@@ -192,7 +189,7 @@ impl EditorInner {
             break;
           };
         }
-      }
+      };
     }
 
     terminal::disable_raw_mode()?;
@@ -203,7 +200,6 @@ impl EditorInner {
       .borrow_mut()
       .backend_mut()
       .execute(terminal::LeaveAlternateScreen)?;
-
     return Ok(());
   }
 }

@@ -12,7 +12,7 @@ use zhazba_render::{TermRender, disable_raw_mode, terminal_size};
 async fn main() -> Result<()> {
   std::panic::set_hook(Box::new(|info| {
     let _ = disable_raw_mode();
-    info!("{:?}", info);
+    info!("{:#?}", info);
   }));
 
   let args = Args::new();
@@ -64,8 +64,6 @@ async fn main() -> Result<()> {
     .unwrap_or_else(|err| {
       error!("{:?}", err);
     });
-  // info!("{:#?}", editor.borrow().config);
-  // info!("{:#?}", editor.borrow().render);
 
 
   editor.borrow_mut().run().await?;

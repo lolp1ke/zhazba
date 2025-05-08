@@ -21,8 +21,11 @@ pub enum Action {
   MoveUp,
   MoveDown,
 
+  InsertIntoRegisterAtPos(String, String, usize, usize),
   InsertIntoRegister(String, String),
+  InsertIntoCurrentRegister(String),
   DeletePrevFromRegister(String),
+  DeletePrevFromCurrentRegister,
   ClearRegister(String),
   InsertIntoBufferAt(usize, usize, String),
   // Callback(Function),
@@ -36,11 +39,3 @@ pub enum KeyAction {
   Multiple(Vec<Action>),
   Nested(HashMap<String, KeyAction>),
 }
-// impl zhazba_lua::IntoLua for KeyAction {
-//   fn into_lua(
-//     self,
-//     lua: &zhazba_lua::Lua,
-//   ) -> zhazba_lua::Result<zhazba_lua::Value> {
-//     todo!()
-//   }
-// }
