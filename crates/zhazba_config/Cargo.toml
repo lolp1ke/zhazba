@@ -7,3 +7,6 @@ edition = "2024"
 # Internal crates
 zhazba_action = { workspace = true }
 zhazba_lua = { workspace = true }
+
+# External packages
+parking_lot = { workspace = true }

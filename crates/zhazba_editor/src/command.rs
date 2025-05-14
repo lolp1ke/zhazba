@@ -19,7 +19,7 @@ impl EditorInner {
       let cmd = args.next();
       let args = args.collect::<Vec<&str>>();
       if let Some(cmd) = cmd {
-        let ka = self.commands().get(cmd).cloned();
+        let ka = self.cfg().commands.get(cmd).cloned();
         if let Some(ka) = ka {
           self.handle_key_action(ka);
           return self.execute_actions();

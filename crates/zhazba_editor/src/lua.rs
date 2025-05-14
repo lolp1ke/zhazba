@@ -1,7 +1,7 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use zhazba_config::Config;
-use zhazba_lua::{lua_method, lua_userdata};
+use zhazba_lua::{Function, lua_method, lua_userdata};
 use zhazba_render::TermRender;
 
 use crate::Editor;
@@ -11,18 +11,32 @@ use crate::Editor;
 impl Editor {
   #[lua_method]
   fn config(&self) -> Config {
-    return self.borrow().config.clone();
+    return self.write_arc().config.clone();
   }
   #[lua_method]
   fn render(&self) -> TermRender {
-    return self.borrow().render.clone();
+    return self.write_arc().render.clone();
   }
   #[lua_method]
   fn create_register(&self, mode: String) {
     self
-      .borrow_mut()
+      .write_arc()
       .register_map
       // NOTE: Maybe use String::with_capacity(...);
-      .insert(Rc::from(mode), String::new());
+      .insert(Arc::from(mode), String::new());
+  }
+
+  #[lua_method]
+  fn event_callback(&mut self, event_name: String, lua_cb: Function) {
+    unsafe {
+      self.force_unlock_write_fair();
+    };
+    if let Some(lua_callbacks) = self
+      .write_arc()
+      .event_callbacks
+      .get_mut(&Arc::from(event_name))
+    {
+      lua_callbacks.push(lua_cb);
+    };
   }
 }

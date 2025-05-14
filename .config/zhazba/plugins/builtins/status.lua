@@ -1,0 +1,6 @@
+Editor:event_callback("on_mode_change", function()
+  info("from event callback")
+end)
+Editor:event_callback("on_mode_change", function()
+  info("from event callback second")
+end)

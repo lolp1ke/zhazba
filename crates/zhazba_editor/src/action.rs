@@ -1,7 +1,7 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::Result;
-use tracing::{error, info};
+use tracing::{debug, error};
 
 use zhazba_action::Action;
 
@@ -20,7 +20,7 @@ impl EditorInner {
   fn execute_action(&mut self, action: Action) -> Result<bool> {
     use Action::*;
 
-    info!("Action to be executed: {:?}", action);
+    debug!("Action to be executed: {:?}", action);
     match action {
       Quit(force) => {
         if force {
@@ -41,7 +41,7 @@ impl EditorInner {
       }
 
       EnterRegister(register) => {
-        self.current_register = Some(Rc::from(register));
+        self.current_register = Some(Arc::from(register));
       }
       LeaveRegister => self.current_register = None,
 
@@ -54,7 +54,7 @@ impl EditorInner {
       MoveDown => todo!(),
 
       InsertIntoRegister(register, append_char) => {
-        if let Some(content) = self.register_map.get_mut(&Rc::from(register)) {
+        if let Some(content) = self.register_map.get_mut(&Arc::from(register)) {
           content.push_str(&append_char);
         };
       }
@@ -66,7 +66,7 @@ impl EditorInner {
         };
       }
       DeletePrevFromRegister(register) => {
-        if let Some(content) = self.register_map.get_mut(&Rc::from(register)) {
+        if let Some(content) = self.register_map.get_mut(&Arc::from(register)) {
           content.pop();
         };
       }
@@ -78,12 +78,25 @@ impl EditorInner {
         };
       }
       ClearRegister(register) => {
-        if let Some(content) = self.register_map.get_mut(&Rc::from(register)) {
+        if let Some(content) = self.register_map.get_mut(&Arc::from(register)) {
           content.clear();
         };
       }
-      InsertIntoBufferAt(cx, cy, append_char) => {
+      InsertIntoBufferAt(append_char, cx, cy) => {
         self.insert_into_buffer((cx, cy), &append_char);
+      }
+
+      EventCallback(event_name) => {
+        if let Some(lua_callbacks) = self.event_callbacks.get(&*event_name) {
+          for lua_callback in lua_callbacks.iter() {
+            lua_callback.call::<()>(()).unwrap_or_else(|err| {
+              error!(
+                "Failed to call callback function on event: {}\nError: {}",
+                event_name, err
+              );
+            });
+          }
+        };
       }
 
       _ => error!("Action: {:?} is not implemented yet", action),

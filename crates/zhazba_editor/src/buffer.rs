@@ -10,7 +10,7 @@ impl EditorInner {
     self
       .buffer_manager
       .get_buffer_mut()
-      .borrow_mut()
+      .write_arc()
       .insert(pos, content);
   }
 }

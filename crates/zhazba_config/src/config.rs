@@ -1,12 +1,13 @@
-use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
+use std::{collections::HashMap, ops::Deref, sync::Arc};
 
+use parking_lot::RwLock;
 use zhazba_action::KeyAction;
 
 
 #[derive(Clone, Debug)]
-pub struct Config(Rc<RefCell<ConfigInner>>);
+pub struct Config(Arc<RwLock<ConfigInner>>);
 impl Deref for Config {
-  type Target = Rc<RefCell<ConfigInner>>;
+  type Target = Arc<RwLock<ConfigInner>>;
 
   fn deref(&self) -> &Self::Target {
     return &self.0;
@@ -14,7 +15,7 @@ impl Deref for Config {
 }
 impl Default for Config {
   fn default() -> Self {
-    Self(Rc::new(RefCell::new(ConfigInner {
+    Self(Arc::new(RwLock::new(ConfigInner {
       theme: String::new(),
 
       keymaps: HashMap::new(),

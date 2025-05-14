@@ -1,5 +1,6 @@
 local config = Editor:config()
 
+
 config:add_keymap("i", "n", KeyAction:Single(Action:ChangeMode("i")))
 config:add_keymap("a", "n", KeyAction:Single(Action:ChangeMode("i")))
 

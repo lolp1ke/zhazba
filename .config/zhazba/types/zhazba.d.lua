@@ -3,6 +3,8 @@
 --- @field render fun(self: self): Render
 ---
 --- @field create_register fun(self: self, name: string): nil
+---
+--- @field event_callback fun(self: self, event_name: string, event_callback: fun()): nil
 Editor = {}
 
 --- @class Config
@@ -38,10 +40,12 @@ KeyAction = {}
 --- @field InsertIntoCurrentRegister fun(self: self, ch: string): self
 --- @field DeletePrevFromRegister fun(self: self, name: string): self
 --- @field DeletePrevFromCurrentRegister fun(self: self): self
+---
+--- @field EventCallback fun(self: self, event_name: string): self
 Action = {}
 
---- @param message any
+-- - @param message any
 --- @return nil
 --- @diagnostic disable-next-line: lowercase-global
-function info(message)
+function info(...)
 end

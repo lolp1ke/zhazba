@@ -5,16 +5,19 @@ use std::{
 
 use anyhow::Result;
 use tokio::{runtime::Builder, sync::oneshot};
+use tracing::{debug, error};
+use zhazba_lua::with_global_lua;
 
 
 #[derive(Debug)]
 pub struct Runtime {
-  tx: mpsc::SyncSender<Task>,
+  tx: mpsc::Sender<Task>,
   rx: Arc<Mutex<mpsc::Receiver<Task>>>,
 }
 impl Runtime {
   pub fn new() -> Self {
-    let (sender, receiver) = mpsc::sync_channel::<Task>(0);
+    let (sender, receiver) = mpsc::channel::<Task>();
+
 
     return Self {
       tx: sender,
@@ -31,17 +34,37 @@ impl Runtime {
       for task in rx.lock().unwrap().iter() {
         rt.block_on(async {
           match task.kind {
-            TaskKind::Module => {}
+            TaskKind::LoadModule => {
+              match with_global_lua(|lua| lua.load(task.code).exec()) {
+                Ok(_) => {}
+                Err(err) => {
+                  error!("{}", err);
+                  panic!();
+                }
+              };
+              task.responder.send(Ok(())).unwrap();
+            }
             TaskKind::Execute => {}
           };
         });
       }
     });
 
+    debug!("Plugin runtime started");
     return Ok(());
   }
+  pub async fn load_module(&mut self, code: &str) -> Result<()> {
+    let (responder, rx) = oneshot::channel::<Result<()>>();
+    self.tx.send(Task {
+      responder,
+      code: code.to_string(),
+      kind: TaskKind::LoadModule,
+    })?;
+
+
+    return rx.await?;
+  }
 }
-unsafe impl Sync for Runtime {}
 
 
 struct Task {
@@ -51,6 +74,6 @@ struct Task {
 }
 
 enum TaskKind {
-  Module,
+  LoadModule,
   Execute,
 }

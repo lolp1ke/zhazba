@@ -13,7 +13,7 @@ impl Config {
     mode: String,
     ka: KeyAction,
   ) -> Option<KeyAction> {
-    return self.borrow_mut().keymaps.insert(
+    return self.write_arc().keymaps.insert(
       (
         key_code.to_lowercase(),
         mode.chars().last().unwrap_or_else(|| '\0'),
@@ -28,7 +28,7 @@ impl Config {
     ka: KeyAction,
   ) -> Option<KeyAction> {
     return self
-      .borrow_mut()
+      .write_arc()
       .commands
       .insert(key_code.to_lowercase(), ka);
   }

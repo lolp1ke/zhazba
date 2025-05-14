@@ -17,4 +17,6 @@ anyhow = { workspace = true }
 crossterm = { workspace = true }
 futures = { workspace = true }
 futures-timer = { workspace = true }
+parking_lot = { workspace = true }
+ratatui = { workspace = true }
 tracing = { workspace = true }

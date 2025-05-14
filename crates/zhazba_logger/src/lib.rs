@@ -11,11 +11,11 @@ pub fn init_logger() {
       Rotation::DAILY
     },
     if env!("ENV") == "DEBUG" {
-      "logs"
+      "./logs"
     } else {
       todo!()
     },
-    "zhazba",
+    "zhazba.log",
   );
   let fmt_layer = fmt::Layer::new()
     .with_writer(file_appender)

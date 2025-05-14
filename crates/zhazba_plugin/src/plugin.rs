@@ -1,22 +1,24 @@
-use std::{cell::RefCell, ops::Deref, rc::Rc};
+use std::{collections::HashMap, ops::Deref, path::PathBuf, sync::Arc};
 
 use anyhow::Result;
+use parking_lot::RwLock;
+use tracing::debug;
 
 use crate::{Registry, Runtime};
 
 
 #[derive(Clone, Debug)]
-pub struct Plugin(Rc<RefCell<PluginInner>>);
+pub struct Plugin(Arc<RwLock<PluginInner>>);
 impl Plugin {
   pub fn new() -> Self {
-    return Self(Rc::new(RefCell::new(PluginInner {
+    return Self(Arc::new(RwLock::new(PluginInner {
       runtime: Runtime::new(),
       registry: Registry::default(),
     })));
   }
 }
 impl Deref for Plugin {
-  type Target = Rc<RefCell<PluginInner>>;
+  type Target = Arc<RwLock<PluginInner>>;
 
   fn deref(&self) -> &Self::Target {
     return &self.0;
@@ -29,24 +31,27 @@ pub struct PluginInner {
   registry: Registry,
 }
 impl PluginInner {
-  fn load(&mut self) -> Result<()> {
-    let plugins_dir = if env!("ENV") == "debug" {
-      ".config/plugins/"
-    } else {
-      "~/.config/zhazba/plugins/"
-    };
+  pub async fn init(&mut self) -> Result<()> {
+    self.registry.load()?;
+    self.runtime.init()?;
 
-    self
-      .registry
-      .add_plugin("test", &format!("{}{}", plugins_dir, "test.lua"));
 
+    for (_, path) in self.plugins().clone() {
+      match std::fs::read_to_string(PathBuf::from(&*path)) {
+        Ok(code) => {
+          self.runtime.load_module(&code).await?;
+        }
+        Err(_) => todo!(),
+      };
+    }
+
+
+    debug!("Plugin manager initted");
     return Ok(());
   }
 
-  pub fn init(&mut self) -> Result<()> {
-    self.load()?;
 
-    self.runtime.init()?;
-    return Ok(());
+  fn plugins(&self) -> &HashMap<Arc<str>, Arc<str>> {
+    return &self.registry.plugins;
   }
 }

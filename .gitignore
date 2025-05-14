@@ -3,3 +3,4 @@ logs/
 examples/
 
 Cargo.lock
+.Ds_Store

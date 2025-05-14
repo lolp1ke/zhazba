@@ -1,18 +1,19 @@
-use std::{cell::RefCell, io, ops::Deref, path::PathBuf, rc::Rc};
+use std::{io, ops::Deref, path::PathBuf, sync::Arc};
 
-use ropey::Rope;
+use parking_lot::RwLock;
+use ropey::{Rope, iter::Lines};
 use tracing::error;
 
 
 #[derive(Clone, Debug)]
-pub struct Buffer(Rc<RefCell<BufferInner>>);
+pub struct Buffer(Arc<RwLock<BufferInner>>);
 impl Buffer {
   pub fn new(buffer: BufferInner) -> Self {
-    return Self(Rc::new(RefCell::new(buffer)));
+    return Self(Arc::new(RwLock::new(buffer)));
   }
 }
 impl Deref for Buffer {
-  type Target = Rc<RefCell<BufferInner>>;
+  type Target = Arc<RwLock<BufferInner>>;
 
   fn deref(&self) -> &Self::Target {
     return &self.0;
@@ -68,5 +69,12 @@ impl BufferInner {
     let insert_idx: usize = self.pos_to_idx((cx, cy));
     self.content.insert(insert_idx, content);
     self.changed = true;
+  }
+
+  pub fn lines(&self) -> Lines {
+    return self.content.lines();
+  }
+  pub fn as_str(&self) -> String {
+    return self.content.to_string();
   }
 }

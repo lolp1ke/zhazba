@@ -12,6 +12,7 @@ zhazba_render_derive = { path = "../zhazba_render_derive" }
 # External packages
 anyhow = { workspace = true }
 crossterm = { workspace = true }
+parking_lot = { workspace = true }
 ratatui = { workspace = true }
 ropey = { workspace = true }
 tracing = { workspace = true }

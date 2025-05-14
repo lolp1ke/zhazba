@@ -1,45 +1,49 @@
 use std::{
-  cell::{Ref, RefCell},
   collections::{HashMap, VecDeque},
   fs::DirEntry,
   ops::Deref,
   path::PathBuf,
-  rc::Rc,
+  sync::Arc,
   time::Duration,
 };
 
 use anyhow::Result;
 use crossterm::{ExecutableCommand, event, terminal};
 use futures::{FutureExt, StreamExt, select};
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+// NOTE: mb remove ratatui from dependencies for this crate
+use ratatui::layout::Rect;
 use tracing::error;
 
-use zhazba_action::{Action, KeyAction};
+use zhazba_action::Action;
 use zhazba_buffer::{Buffer, BufferInner, BufferManager};
-use zhazba_config::Config;
+use zhazba_config::{Config, ConfigInner};
+use zhazba_lua::Function;
 use zhazba_plugin::Plugin;
-use zhazba_render::TermRender;
+use zhazba_render::{TermRender, UiNode};
 
 
 #[derive(Clone, Debug)]
-pub struct Editor(Rc<RefCell<EditorInner>>);
+pub struct Editor(Arc<RwLock<EditorInner>>);
 impl Editor {
   pub(crate) const DEFAULT_MODE: char = 'n';
   pub(crate) const BUFFER_MODE: char = 'i';
   pub(crate) const COMMAND_REGISTER: &str = "cmd";
 
 
-  pub fn new(
-    workspace: Option<PathBuf>,
-    render: TermRender,
-    size: (u16, u16),
-  ) -> Self {
-    return Self(Rc::new(RefCell::new(EditorInner::new(
-      workspace, render, size,
+  pub fn new(workspace: Option<PathBuf>, render: TermRender) -> Self {
+    let size = render.read().stdout.read().size().unwrap();
+
+
+    return Self(Arc::new(RwLock::new(EditorInner::new(
+      workspace,
+      render,
+      (size.width, size.height),
     ))));
   }
 }
 impl Deref for Editor {
-  type Target = Rc<RefCell<EditorInner>>;
+  type Target = Arc<RwLock<EditorInner>>;
 
   fn deref(&self) -> &Self::Target {
     return &self.0;
@@ -61,10 +65,11 @@ pub struct EditorInner {
   pub(crate) pos: (usize, usize),
   v_pos: (usize, usize),
 
-  pub(crate) register_map: HashMap<Rc<str>, String>,
-  pub(crate) current_register: Option<Rc<str>>,
+  pub(crate) register_map: HashMap<Arc<str>, String>,
+  pub(crate) current_register: Option<Arc<str>>,
 
   pub(crate) actions_queqe: VecDeque<Action>,
+  pub(crate) event_callbacks: HashMap<Arc<str>, Vec<Function>>,
 }
 impl EditorInner {
   pub fn new(
@@ -72,8 +77,12 @@ impl EditorInner {
     render: TermRender,
     size: (u16, u16),
   ) -> Self {
-    let register_map =
-      HashMap::from_iter([(Rc::from(Editor::COMMAND_REGISTER), String::new())]);
+    let register_map = HashMap::from_iter([(
+      Arc::from(Editor::COMMAND_REGISTER),
+      String::new(),
+    )]);
+    let event_callbacks =
+      HashMap::from_iter([(Arc::from("on_mode_change"), Vec::new())]);
 
     let mut editor = Self {
       config: Config::default(),
@@ -93,6 +102,7 @@ impl EditorInner {
       current_register: None,
 
       actions_queqe: VecDeque::new(),
+      event_callbacks,
     };
     let _ = editor.load_dir();
 
@@ -117,6 +127,7 @@ impl EditorInner {
 
 
     return Ok(());
+    // TODO: Move into something like src/tools?
     fn visit_dirs(dir: &PathBuf, cb: &mut dyn FnMut(&DirEntry)) -> Result<()> {
       if !dir.is_dir() {
         return Ok(());
@@ -135,20 +146,23 @@ impl EditorInner {
       return Ok(());
     }
   }
-  pub(crate) fn keymaps(&self) -> Ref<'_, HashMap<(String, char), KeyAction>> {
-    return Ref::map(self.config.borrow(), |config| return &config.keymaps);
-  }
-  pub(crate) fn commands(&self) -> Ref<'_, HashMap<String, KeyAction>> {
-    return Ref::map(self.config.borrow(), |config| return &config.commands);
+  pub(crate) fn cfg(&self) -> MappedRwLockReadGuard<'_, ConfigInner> {
+    return RwLockReadGuard::map(self.config.read(), |cfg| return cfg);
   }
 
 
   pub async fn run(&mut self) -> Result<()> {
-    self.plugin.borrow_mut().init()?;
+    self.plugin.write_arc().init().await?;
 
     let mut event_stream = event::EventStream::new();
 
-    self.render.borrow().draw_frame()?;
+    let b = self.buffer_manager.get_buffer().clone();
+    self
+      .render
+      .write_arc()
+      .node
+      .append_child(UiNode::Buffer(Arc::new(b)));
+    self.render.write_arc().draw_frame()?;
     loop {
       let mut delay =
         futures_timer::Delay::new(Duration::from_millis(100)).fuse();
@@ -184,7 +198,7 @@ impl EditorInner {
           };
 
 
-          self.render.borrow_mut().draw_frame()?;
+          self.render.write_arc().draw_frame()?;
           if self.execute_actions()? {
             break;
           };
@@ -195,9 +209,9 @@ impl EditorInner {
     terminal::disable_raw_mode()?;
     self
       .render
-      .borrow_mut()
+      .write_arc()
       .stdout
-      .borrow_mut()
+      .write_arc()
       .backend_mut()
       .execute(terminal::LeaveAlternateScreen)?;
     return Ok(());

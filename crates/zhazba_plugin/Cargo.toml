@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Internal crates
+zhazba_lua = { workspace = true }
+
 # External packages
 anyhow = { workspace = true }
+parking_lot = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
