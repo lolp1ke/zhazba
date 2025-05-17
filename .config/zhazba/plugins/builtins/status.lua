@@ -1,6 +1,6 @@
 local render = Editor:render()
 local root = render:window()
-local status_line = root:paragraph(Editor:mode())
+local status_line = root:paragraph(Editor:mode(), { variant = "Min", value = 1 })
 
 
 Editor:event_callback("on_mode_change", function()

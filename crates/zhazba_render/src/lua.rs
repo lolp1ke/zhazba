@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use ratatui::{layout::Constraint, widgets::Paragraph};
 
@@ -10,19 +10,52 @@ use zhazba_lua::{
 use crate::{TermRender, UiNode, UiNodeInner};
 
 
-#[derive(Clone)]
+// TODO: Create proc_macro_attribute
 struct LuaWrapper<T>(T);
+impl<T> Deref for LuaWrapper<T> {
+  type Target = T;
+
+  fn deref(&self) -> &Self::Target {
+    return &self.0;
+  }
+}
 impl FromLua for LuaWrapper<Constraint> {
   fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
-    return Ok(match value.as_table() {
-      Some(ud) => {
-        todo!()
+    match value.as_table() {
+      Some(t) => {
+        let value = t.get::<u16>("value")?;
+        let variant = t.get::<String>("variant")?;
+
+
+        match variant.to_lowercase().as_str() {
+          "fill" => {
+            return Ok(Self(Constraint::Fill(value)));
+          }
+          "lenght" => {
+            return Ok(Self(Constraint::Length(value)));
+          }
+          "max" => {
+            return Ok(Self(Constraint::Max(value)));
+          }
+          "min" => {
+            return Ok(Self(Constraint::Min(value)));
+          }
+          "percentage" => {
+            return Ok(Self(Constraint::Percentage(value)));
+          }
+
+          _ => {
+            return Err(LuaError::RuntimeError(format!(
+              "Unexpected key value for a table"
+            )));
+          }
+        };
       }
 
       _ => {
         return Err(LuaError::RuntimeError(format!("Expected table")));
       }
-    });
+    };
   }
 }
 
@@ -34,17 +67,20 @@ impl LuaUserData for UiNode {
     });
 
 
-    methods.add_method("paragraph", |_, this, text: String| {
-      let node = Self::new(UiNodeInner::Paragraph {
-        widget: Paragraph::new(text),
-      });
-      this
-        .write_arc()
-        .append_child(Self::raw(Arc::clone(&node)), Constraint::Min(1));
+    methods.add_method(
+      "paragraph",
+      |_, this, (text, constraint): (String, LuaWrapper<Constraint>)| {
+        let node = Self::new(UiNodeInner::Paragraph {
+          widget: Paragraph::new(text),
+        });
+        this
+          .write_arc()
+          .append_child(Self::raw(Arc::clone(&node)), *constraint);
 
 
-      return Ok(node);
-    });
+        return Ok(node);
+      },
+    );
     methods.add_method("alter", |_, this, text: String| {
       this.write_arc().text(text);
 
