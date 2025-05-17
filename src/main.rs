@@ -1,54 +1,50 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use tracing::{debug, error, info};
 
 use zhazba_args::Args;
 use zhazba_editor::Editor;
 use zhazba_logger::init_logger;
-use zhazba_lua::{ObjectLike, with_global_lua};
-use zhazba_render::{TermRender, disable_raw_mode};
+use zhazba_lua::{LuaObjectLike, LuaValue, LuaVariadic, with_global_lua};
+use zhazba_plugin::Plugin;
+use zhazba_render::TermRender;
 
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
+  init_logger();
   let default_hook = std::panic::take_hook();
   std::panic::set_hook(Box::new(move |info| {
-    _ = disable_raw_mode();
+    TermRender::cleanup().unwrap();
 
 
     // FIXME: implement downcast for payload
     //        mb move to something like src/tools/panic?
+    // info.
     error!(
-      "{:#?}",
-      if let Some(&s) = info.payload().downcast_ref::<&'static str>() {
-        s
-      } else if let Some(s) = info.payload().downcast_ref::<String>() {
-        s.as_str()
-      } else {
-        "Box<dyn Any>"
-      }
+      "{:?}\n{:#?}",
+      info.payload().downcast_ref::<&'static str>(),
+      std::backtrace::Backtrace::capture(),
     );
     default_hook(info);
   }));
-
   let args = Args::new();
-  init_logger();
 
 
   let render = TermRender::new()?;
-  let editor = Editor::new(args.workspace, render);
+  let plugin = Plugin::new();
+  let editor =
+    Editor::new(args.workspace, render, Plugin::raw(Arc::clone(&plugin)))?;
 
 
   let config_source = match std::fs::read_to_string(format!(
     "{}.config/zhazba/init.lua",
-    if env!("ENV") == "DEBUG" { "./" } else { "~/" }
+    if env!("ENV") == "DEBUG" { "./" } else { "~/" },
   )) {
     Ok(source) => source,
-    Err(err) => {
-      error!("{:?}", err);
-      panic!();
-    }
+    Err(_) => panic!(),
   };
-
   with_global_lua(|lua| {
     use zhazba_action::{ActionUserDataFactory, KeyActionUserDataFactory};
     lua
@@ -67,32 +63,30 @@ async fn main() -> Result<()> {
     let key_action = lua.create_userdata(KeyActionUserDataFactory)?;
     lua.globals().set("KeyAction", key_action)?;
 
-    let info = lua.create_function(
-      |_, args: zhazba_lua::Variadic<zhazba_lua::Value>| {
-        let msg: Vec<_> = args
-          .iter()
-          .map(|arg| match arg {
-            zhazba_lua::Value::Nil => "nil".to_string(),
-            zhazba_lua::Value::Boolean(b) => format!("{}", b),
-            zhazba_lua::Value::Integer(i) => format!("{}", i),
-            zhazba_lua::Value::Number(n) => format!("{}", n),
-            zhazba_lua::Value::String(s) => format!("{}", s.display()),
-            zhazba_lua::Value::Table(t) => format!(
-              "{}",
-              t.to_string().unwrap_or_else(|_| "<table>".to_string()),
-            ),
-            zhazba_lua::Value::UserData(t) => format!(
-              "{}",
-              t.to_string().unwrap_or_else(|_| "<user_data>".to_string()),
-            ),
+    let info = lua.create_function(|_, args: LuaVariadic<LuaValue>| {
+      let msg = args
+        .iter()
+        .map(|arg| match arg {
+          LuaValue::Nil => "nil".to_string(),
+          LuaValue::Boolean(b) => format!("{}", b),
+          LuaValue::Integer(i) => format!("{}", i),
+          LuaValue::Number(n) => format!("{}", n),
+          LuaValue::String(s) => format!("{}", s.display()),
+          LuaValue::Table(t) => format!(
+            "{}",
+            t.to_string().unwrap_or_else(|_| "<table>".to_string()),
+          ),
+          LuaValue::UserData(t) => format!(
+            "{}",
+            t.to_string().unwrap_or_else(|_| "<user_data>".to_string()),
+          ),
 
-            _ => "<?>".to_string(),
-          })
-          .collect();
-        info!("{}", msg.join(" "));
-        return Ok(());
-      },
-    )?;
+          _ => "<?>".to_string(),
+        })
+        .collect::<Vec<_>>();
+      info!("{}", msg.join(" "));
+      return Ok(());
+    })?;
     lua.globals().set("info", info)?;
 
     lua.load(&config_source).exec()?;
@@ -101,15 +95,18 @@ async fn main() -> Result<()> {
   })?;
 
 
-  editor.write_arc().run().await?;
-  debug!("{:#?}", editor.read());
-  // match with_global_lua(|lua| {
-  //   lua.load("").exec()?;
+  plugin.write_arc().init().await?;
+  editor
+    .write_arc()
+    .run(|| unsafe {
+      // FIXME: idk if it is the good way to resolve the problem but for now it works just fines
+      editor.force_unlock_read_fair();
+      editor.force_unlock_write_fair();
+    })
+    .await?;
+  // debug!("{:#?}", editor.read_arc());
 
-  //   return Ok::<(), anyhow::Error>(());
-  // }) {
-  //   Ok(_) => {}
-  //   Err(err) => error!("{}", err),
-  // };
+
+  TermRender::cleanup()?;
   return Ok(());
 }

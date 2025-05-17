@@ -1,4 +1,5 @@
-pub use mlua::*;
+pub use mlua::Variadic as LuaVariadic;
+pub use mlua::prelude::*;
 pub use zhazba_lua_derive::*;
 
 use once_cell::sync::Lazy;

@@ -1,1 +1,0 @@
-info("buffer plugin init")

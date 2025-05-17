@@ -1,6 +1,6 @@
 use crossterm::event;
+use tracing::debug;
 
-use tracing::{debug, info};
 use zhazba_action::{Action, KeyAction};
 
 use crate::{Editor, EditorInner};
@@ -20,12 +20,11 @@ impl EditorInner {
         KeyCode::Tab => return format!("<tab>"),
         KeyCode::Char(ch)
           if self.mode == Editor::DEFAULT_MODE
-            && ch == self.cfg().leader
+            && ch == self.config.read_arc().leader
             && !self.is_cmd_register() =>
         {
           return format!("<leader>");
         }
-
         _ => {}
       };
     };
@@ -111,7 +110,8 @@ impl EditorInner {
       }) => {
         let key_code = self.format_key_event(code, modifiers);
         let ka = self
-          .cfg()
+          .config
+          .read_arc()
           .keymaps
           .get(&(key_code.clone(), self.mode))
           .cloned();
@@ -119,15 +119,15 @@ impl EditorInner {
         if let Some(ka) = ka {
           return Some(ka);
         };
-        // if self.mode == Editor::BUFFER_MODE {
-        //   let (cx, cy) = self.pos;
+        if self.mode == Editor::BUFFER_MODE {
+          let (cx, cy) = self.pos;
 
 
-        //   return Some(KeyAction::Multiple(vec![
-        //     Action::InsertIntoBufferAt(cx, cy, code.to_string()),
-        //     Action::MoveTo(cx + 1, cy),
-        //   ]));
-        // };
+          return Some(KeyAction::Multiple(vec![
+            Action::InsertIntoBufferAt(code.to_string(), cx, cy),
+            Action::MoveTo(cx + 1, cy),
+          ]));
+        };
 
 
         return None;
@@ -142,12 +142,13 @@ impl EditorInner {
     match ka {
       Single(action) => {
         self.check_for_native_events(&action);
-        self.actions_queqe.push_back(action);
+        self.actions_queqe.push_front(action);
       }
-      Multiple(actions) => {
+      Multiple(mut actions) => {
+        actions.reverse();
         for action in actions {
           self.check_for_native_events(&action);
-          self.actions_queqe.push_back(action);
+          self.actions_queqe.push_front(action);
         }
       }
       Nested(keymap) => {
@@ -155,21 +156,4 @@ impl EditorInner {
       }
     };
   }
-  // pub(crate) fn handle_key_action_front(&mut self, ka: KeyAction) {
-  //   use KeyAction::*;
-
-  //   match ka {
-  //     Single(action) => {
-  //       self.actions_queqe.push_front(action);
-  //     }
-  //     Multiple(actions) => {
-  //       for action in actions {
-  //         self.actions_queqe.push_front(action);
-  //       }
-  //     }
-  //     Nested(keymap) => {
-  //       todo!("{:?}", keymap);
-  //     }
-  //   };
-  // }
 }

@@ -9,6 +9,15 @@ pub struct Registry {
   pub(crate) plugins: HashMap<Arc<str>, Arc<str>>,
 }
 impl Registry {
+  pub(crate) fn new() -> Self {
+    let mut registry = Self {
+      plugins: HashMap::new(),
+    };
+    _ = registry.load();
+
+    return registry;
+  }
+
   fn add_plugin(&mut self, name: &str, path: &str) -> Option<Arc<str>> {
     return self.plugins.insert(Arc::from(name), Arc::from(path));
   }

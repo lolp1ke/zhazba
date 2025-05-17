@@ -12,7 +12,7 @@ impl EditorInner {
   pub(crate) fn execute_actions(&mut self) -> Result<bool> {
     let mut quit = false;
     while let Some(action) = self.actions_queqe.pop_front() {
-      quit = self.execute_action(action)?;
+      quit |= self.execute_action(action)?;
     }
 
     return Ok(quit);
@@ -29,15 +29,9 @@ impl EditorInner {
 
         return Ok(true);
       }
-      Save => todo!(),
+      Save => {}
       ChangeMode(mode) => {
-        self.mode = mode.chars().next().unwrap_or_else(|| {
-          if env!("ENV") == "DEBUG" {
-            unreachable!()
-          } else {
-            return Editor::DEFAULT_MODE;
-          };
-        });
+        self.mode = mode.chars().next().unwrap_or_else(|| Editor::DEFAULT_MODE);
       }
 
       EnterRegister(register) => {
@@ -54,7 +48,7 @@ impl EditorInner {
       MoveDown => todo!(),
 
       InsertIntoRegister(register, append_char) => {
-        if let Some(content) = self.register_map.get_mut(&Arc::from(register)) {
+        if let Some(content) = self.register_map.get_mut(&*register) {
           content.push_str(&append_char);
         };
       }
@@ -66,7 +60,7 @@ impl EditorInner {
         };
       }
       DeletePrevFromRegister(register) => {
-        if let Some(content) = self.register_map.get_mut(&Arc::from(register)) {
+        if let Some(content) = self.register_map.get_mut(&*register) {
           content.pop();
         };
       }
@@ -78,7 +72,7 @@ impl EditorInner {
         };
       }
       ClearRegister(register) => {
-        if let Some(content) = self.register_map.get_mut(&Arc::from(register)) {
+        if let Some(content) = self.register_map.get_mut(&*register) {
           content.clear();
         };
       }
@@ -97,6 +91,9 @@ impl EditorInner {
             });
           }
         };
+
+        // NOTE: Maybe add rerender action
+        self.render.write_arc().draw_frame()?;
       }
 
       _ => error!("Action: {:?} is not implemented yet", action),

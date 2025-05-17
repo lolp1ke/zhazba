@@ -1,42 +1,53 @@
 use std::{
   fmt::Debug,
-  io::{Stdout, stdout},
+  io::{Stdout, Write, stdout},
   ops::Deref,
   sync::Arc,
 };
 
 use anyhow::Result;
-use crossterm::{ExecutableCommand, terminal};
+use crossterm::{ExecutableCommand, QueueableCommand, cursor, terminal};
 use parking_lot::RwLock;
 use ratatui::{
   Frame, Terminal,
   layout::{Constraint, Direction, Layout, Rect},
   prelude::CrosstermBackend,
+  style::Styled,
   widgets::{Block, Paragraph, Tabs},
 };
-use tracing::error;
+use tracing::{error, info};
 
 use zhazba_buffer::Buffer;
-use zhazba_lua::lua_userdata;
 
-
-pub fn terminal_size() -> Result<(u16, u16)> {
-  return Ok(terminal::size()?);
-}
-pub fn disable_raw_mode() -> Result<()> {
-  return Ok(terminal::disable_raw_mode()?);
-}
 
 #[derive(Clone, Debug)]
-pub enum UiNode {
+pub struct UiNode(Arc<RwLock<UiNodeInner>>);
+impl UiNode {
+  pub fn new(inner: UiNodeInner) -> Self {
+    return Self(Arc::new(RwLock::new(inner)));
+  }
+  pub fn raw(raw: Arc<RwLock<UiNodeInner>>) -> Self {
+    return Self(raw);
+  }
+}
+impl Deref for UiNode {
+  type Target = Arc<RwLock<UiNodeInner>>;
+
+  fn deref(&self) -> &Self::Target {
+    return &self.0;
+  }
+}
+
+#[derive(Debug)]
+pub enum UiNodeInner {
   Block {
     widget: Block<'static>,
     direction: Direction,
-    children: Vec<Self>,
+    children: Vec<(UiNode, Constraint)>,
   },
   Tabs {
     widget: Tabs<'static>,
-    children: Vec<Self>,
+    children: Vec<(UiNode, Constraint)>,
   },
 
   Paragraph {
@@ -46,7 +57,7 @@ pub enum UiNode {
   // maybe add rect for positioning
   Buffer(Arc<Buffer>),
 }
-impl UiNode {
+impl UiNodeInner {
   fn render(&self, frame: &mut Frame, area: Rect) {
     match &self {
       Self::Block {
@@ -56,10 +67,10 @@ impl UiNode {
       } => {
         let layout = Layout::default()
           .direction(direction.clone())
-          .constraints(children.iter().map(|_| Constraint::Fill(1)))
+          .constraints(children.iter().map(|(_, constraint)| constraint))
           .split(area);
-        for (child, &area) in children.iter().zip(layout.iter()) {
-          child.render(frame, area);
+        for ((child, _), &area) in children.iter().zip(layout.iter()) {
+          child.read_arc().render(frame, area);
         }
 
         frame.render_widget(widget, area);
@@ -68,41 +79,39 @@ impl UiNode {
         frame.render_widget(widget, area);
       }
       Self::Buffer(buffer) => {
-        let buffer = buffer.read();
-        // let lines = buffer.lines();
+        let buffer = buffer.read_arc();
         frame.render_widget(Paragraph::new(buffer.as_str()), area);
-
-        // for line in lines {
-        // frame.render_widget(, area);
-        // }
       }
 
       _ => error!("Render method not implemented for: {:?}", self),
     };
   }
 
-  // fn load_buffer(&mut self, content: String) {
-  //   match self {
-  //     Self::Paragraph { widget } => {
-  //       *widget = Paragraph::new(content);
-  //     }
-  //     _ => {}
-  //   };
-  // }
-  pub fn append_child(&mut self, node: Self) {
+  pub fn append_child(&mut self, node: UiNode, constraint: Constraint) {
     match self {
       Self::Block { children, .. } | Self::Tabs { children, .. } => {
-        children.push(node)
+        children.push((node, constraint));
       }
 
       _ => {}
+    };
+  }
+
+  pub fn text(&mut self, text: String) {
+    match self {
+      Self::Paragraph { widget } => {
+        *self = Self::Paragraph {
+          widget: Paragraph::new(text).set_style(Styled::style(widget)),
+        };
+      }
+
+      _ => info!("change not applied"),
     };
   }
 }
 
 #[derive(Clone, Debug)]
 pub struct TermRender(Arc<RwLock<TermRenderInner>>);
-#[lua_userdata]
 impl TermRender {
   pub fn new() -> Result<Self> {
     terminal::enable_raw_mode()?;
@@ -111,30 +120,41 @@ impl TermRender {
       .execute(terminal::EnterAlternateScreen)?
       .execute(terminal::Clear(terminal::ClearType::All))?;
     let stdout = Terminal::new(CrosstermBackend::new(stdout))?;
-    let stdout = Arc::new(RwLock::new(stdout));
 
 
-    let node = UiNode::Block {
+    let mut node = UiNodeInner::Block {
       widget: Block::new(),
       direction: Direction::Vertical,
       children: Vec::new(),
     };
+    node.append_child(
+      UiNode::new(UiNodeInner::Block {
+        widget: Block::default(),
+        direction: Direction::Horizontal,
+        children: Vec::new(),
+      }),
+      Constraint::Percentage(100),
+    );
+    let node = UiNode(Arc::new(RwLock::new(node)));
 
-    let layout =
-      Layout::new(Direction::Horizontal, [Constraint::Percentage(100)]);
 
     return Ok(Self(Arc::new(RwLock::new(TermRenderInner {
       stdout,
 
       node,
-      layout,
     }))));
   }
+  pub fn cleanup() -> Result<()> {
+    terminal::disable_raw_mode()?;
+    stdout()
+      .queue(terminal::LeaveAlternateScreen)?
+      .queue(cursor::MoveTo(0, 0))?
+      .queue(cursor::EnableBlinking)?
+      .flush()?;
 
-  // #[lua_method]
-  // fn window(&self) -> UiNode {
-  // return self.borrow().node.clone();
-  // }
+
+    return Ok(());
+  }
 }
 impl Deref for TermRender {
   type Target = Arc<RwLock<TermRenderInner>>;
@@ -147,32 +167,52 @@ impl Deref for TermRender {
 
 #[derive(Debug)]
 pub struct TermRenderInner {
-  pub stdout: Arc<RwLock<Terminal<CrosstermBackend<Stdout>>>>,
+  pub stdout: Terminal<CrosstermBackend<Stdout>>,
 
   pub node: UiNode,
-  layout: Layout,
 }
 impl TermRenderInner {
-  pub fn draw_frame(&self) -> Result<()> {
-    self.stdout.write_arc().draw(|frame| {
-      self.node.render(frame, frame.area());
-      // let chunks = self.layout.split(frame.area());
-
-      // for ((_, node), &area) in self.node.iter().zip(chunks.iter()) {
-      // node.render(frame, area);
-      // }
+  pub fn draw_frame(&mut self) -> Result<()> {
+    self.stdout.draw(|frame| {
+      self.node.write_arc().render(frame, frame.area());
     })?;
 
     return Ok(());
   }
+}
 
-  fn draw_cursor(&self, x: u16, y: u16) -> Result<()> {
-    // self
-    // .stdout
-    // .borrow_mut()
-    // .backend_mut()
-    // .queue(cursor::MoveTo(x, y))?;
 
-    return Ok(());
+#[cfg(test)]
+mod test {
+  use ratatui::{
+    layout::{Constraint, Direction},
+    widgets::{Block, Paragraph},
+  };
+  use tracing::info;
+
+  use super::{UiNode, UiNodeInner};
+
+  #[test]
+  fn a() {
+    let mut window = UiNode::new(UiNodeInner::Block {
+      widget: Block::new(),
+      direction: Direction::Horizontal,
+      children: Vec::new(),
+    });
+    let node = UiNode::new(UiNodeInner::Paragraph {
+      widget: Paragraph::new("mode"),
+    });
+    window
+      .write_arc()
+      .append_child(node.clone(), Constraint::Min(1));
+
+    println!("{:?}", node.read_arc());
+
+
+    node.write_arc().text("text".to_string());
+    println!("{:?}", node.read_arc());
+    println!("window: {:?}", window);
+    node.write_arc().text("other".to_string());
+    println!("window: {:?}", window);
   }
 }

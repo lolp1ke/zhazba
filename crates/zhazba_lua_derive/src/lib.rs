@@ -71,11 +71,11 @@ pub fn lua_userdata(_args: TokenStream, item: TokenStream) -> TokenStream {
   return TokenStream::from(quote! {
     #item_impl
 
-    impl #impl_generics zhazba_lua::UserData for #self_ty #ty_generics #where_clause {
-      fn add_methods<M: zhazba_lua::UserDataMethods<Self>>(methods: &mut M) {
+    impl #impl_generics ::zhazba_lua::LuaUserData for #self_ty #ty_generics #where_clause {
+      fn add_methods<M: ::zhazba_lua::LuaUserDataMethods<Self>>(methods: &mut M) {
           #(#lua_methods)*
 
-          methods.add_meta_method(zhazba_lua::MetaMethod::ToString, |_, this: &Self, ()| {
+          methods.add_meta_method(::zhazba_lua::LuaMetaMethod::ToString, |_, this: &Self, ()| {
             return Ok(format!("{:?}", this));
           });
       }
@@ -129,25 +129,25 @@ pub fn lua_userdata_enum(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     #[derive(Clone)]
     pub struct #factory;
-    impl zhazba_lua::UserData for #factory {
-      fn add_methods<M: zhazba_lua::UserDataMethods<Self>>(methods: &mut M) {
+    impl ::zhazba_lua::LuaUserData for #factory {
+      fn add_methods<M: ::zhazba_lua::LuaUserDataMethods<Self>>(methods: &mut M) {
         #(#method_defs)*
       }
     }
-    impl zhazba_lua::UserData for #enum_ident {}
-    impl zhazba_lua::FromLua for #enum_ident {
-      fn from_lua(value: zhazba_lua::Value, _: &zhazba_lua::Lua) -> zhazba_lua::Result<Self> {
+    impl ::zhazba_lua::LuaUserData for #enum_ident {}
+    impl ::zhazba_lua::FromLua for #enum_ident {
+      fn from_lua(value: ::zhazba_lua::LuaValue, _: &::zhazba_lua::Lua) -> ::zhazba_lua::LuaResult<Self> {
         return Ok(match value.as_userdata() {
           Some(ud) => match ud.borrow::<Self>() {
             Ok(ud) => ud.clone(),
 
             _ => {
-              return Err(zhazba_lua::Error::RuntimeError(format!("Expected: {}", stringify!(#enum_ident))));
+              return Err(::zhazba_lua::LuaError::RuntimeError(format!("Expected: {}", stringify!(#enum_ident))));
             }
           }
 
           _ => {
-            return Err(zhazba_lua::Error::RuntimeError(format!("Expected userdata")));
+            return Err(::zhazba_lua::LuaError::RuntimeError(format!("Expected userdata")));
           }
         });
       }

@@ -20,7 +20,7 @@ impl Deref for Buffer {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BufferInner {
   pub file: PathBuf,
   changed: bool,
